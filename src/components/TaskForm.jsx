@@ -69,7 +69,6 @@ export default function TaskForm({ task, isNew, t, onSave, onDelete, onClose, he
         {draft.remindAt && (
           <>
             <input type="datetime-local" value={draft.remindAt} onChange={set('remindAt')} />
-            <p className="hint">{t('remindHint')}</p>
           </>
         )}
 

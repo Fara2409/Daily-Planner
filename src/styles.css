@@ -322,3 +322,20 @@ button { cursor: pointer; }
 
 .voice-level { width: 70px; height: 6px; border-radius: 3px; background: rgba(127, 127, 127, 0.35); overflow: hidden; }
 .voice-level i { display: block; height: 100%; background: #30a46c; transition: width 0.1s linear; }
+
+/* ---------- Уведомления ---------- */
+.notify {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.notify--off { border-color: var(--accent); }
+.notify__text { display: flex; flex-direction: column; gap: 2px; font-size: 0.85rem; color: var(--muted); }
+.notify__text strong { color: var(--text); font-size: 0.95rem; }
+.notify .btn { flex: none; }
+.notify--on { padding: 8px 14px; }
+.notify--on .notify__text { flex-direction: row; gap: 8px; align-items: baseline; }
+.notify--on .notify__text strong { font-size: 0.85rem; }

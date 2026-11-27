@@ -7,6 +7,7 @@ import MonthGrid from './components/MonthGrid.jsx';
 import TaskForm from './components/TaskForm.jsx';
 import LangSwitch from './components/LangSwitch.jsx';
 import VoiceButton from './components/VoiceButton.jsx';
+import NotificationsCard from './components/NotificationsCard.jsx';
 import { addDays, addMonths, fromISO, todayISO, toISO, weekDays } from './lib/dates.js';
 import { occursOn, isDone } from './lib/recurrence.js';
 import { newTask, getSetting, setSetting, loadLocalTasks, clearLocalTasks } from './lib/storage.js';
@@ -190,6 +191,8 @@ export default function Planner({ user, lang, setLang, t }) {
           )}
         </div>
       )}
+
+      <NotificationsCard t={t} lang={lang} />
 
       <main className="content">
         {tasks === null ? (
