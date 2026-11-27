@@ -24,7 +24,9 @@ export default function NotificationsCard({ t, lang }) {
       setState(await fn());
     } catch (e) {
       console.error(e);
-      setError(t('pushError'));
+      // Показываем и техническую причину — на телефоне нет консоли, иначе не понять, что сломалось.
+      const detail = [e?.name, e?.code, e?.message].filter(Boolean).join(': ');
+      setError(`${t('pushError')}${detail ? ` (${detail})` : ''}`);
     } finally {
       setBusy(false);
     }

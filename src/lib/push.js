@@ -3,7 +3,7 @@ import { supabase } from './supabase.js';
 
 // ПУБЛИЧНЫЙ VAPID-ключ — его можно хранить в коде.
 // Приватная пара к нему хранится только в секретах Supabase.
-export const VAPID_PUBLIC_KEY = 'VAPID_PUBLIC_KEY_HERE';
+export const VAPID_PUBLIC_KEY = 'BKxiniGC9tHxoJfcKGO312JatGaC7SMqzWo1U3zT2XTVs1kooMcPeBkkslpvedez6QASc3EIgU4VODLipRUKlIk';
 
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const isStandalone = () =>
@@ -47,14 +47,29 @@ export async function enablePush(lang) {
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') return permission === 'denied' ? 'denied' : 'off';
 
-  const reg = await navigator.serviceWorker.ready;
-  const sub =
-    (await reg.pushManager.getSubscription()) ??
-    (await reg.pushManager.subscribe({
-      userVisibleOnly: true, // каждое push-сообщение обязательно показывается человеку
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-    }));
-  await saveSubscription(sub, lang);
+  // Ждём фонового помощника, но не дольше 10 секунд.
+  const reg = await Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('step 1: service worker not ready')), 10000)),
+  ]);
+
+  let sub;
+  try {
+    sub =
+      (await reg.pushManager.getSubscription()) ??
+      (await reg.pushManager.subscribe({
+        userVisibleOnly: true, // каждое push-сообщение обязательно показывается человеку
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      }));
+  } catch (e) {
+    throw new Error(`step 2: subscribe — ${e?.name ?? ''} ${e?.message ?? e}`);
+  }
+
+  try {
+    await saveSubscription(sub, lang);
+  } catch (e) {
+    throw new Error(`step 3: save — ${e?.code ?? ''} ${e?.message ?? e}`);
+  }
   return 'on';
 }
 
