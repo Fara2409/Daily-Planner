@@ -9,15 +9,20 @@
 //   GEMINI_API_KEY   — ключ Gemini (обязательно)
 //   GEMINI_MODEL     — модель или несколько через запятую: первая основная,
 //                      остальные запасные (например "gemini-4-hydrogen,gemini-3.5-flash")
+//   GEMINI_THINKING  — уровень «размышлений» модели: minimal | low | medium | high
+//                      (необязательно, по умолчанию low — быстро и достаточно для нашей задачи)
+//   GEMINI_TIMEOUT_MS — сколько ждать ответа одной модели, мс (необязательно, по умолчанию 10000)
 //   AI_DAILY_LIMIT   — сколько голосовых запросов в день на человека (необязательно)
 // =====================================================================
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
-const GEMINI_MODELS = (Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.5-flash')
+const GEMINI_MODELS = (Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.5-flash-lite,gemini-3.5-flash')
   .split(',')
   .map((m) => m.trim())
   .filter(Boolean);
+const THINKING = (Deno.env.get('GEMINI_THINKING') ?? 'low').trim();
+const TIMEOUT_MS = Number(Deno.env.get('GEMINI_TIMEOUT_MS') ?? '10000');
 const DAILY_LIMIT = Number(Deno.env.get('AI_DAILY_LIMIT') ?? '30');
 
 // С каких сайтов можно вызывать функцию (защита от чужих сайтов).
@@ -51,6 +56,10 @@ function buildPrompt(now: string, weekday: string, tz: string) {
   return `You are the scheduling assistant of a reminder app called Daily Planner.
 The user speaks Russian, Azerbaijani or English (sometimes mixed).
 Current local date and time of the user: ${now} (${weekday}), time zone ${tz}.
+
+IMPORTANT: work ONLY with what is actually said in the audio. Never invent or guess content.
+If the audio is silent, too quiet, only noise, or the speech is unclear, return
+"understood": false, "transcript": "" and an empty "tasks" list.
 
 Listen to the audio and return JSON:
 - "transcript": exact transcription of what the user said, in the original language.
@@ -158,43 +167,69 @@ Deno.serve(async (req) => {
   // 4) Отправляем аудио в Gemini.
   //    Если модель перегружена (503) или упёрлась в лимит (429) — ждём и пробуем ещё раз,
   //    а потом переходим на запасную модель.
-  const requestBody = JSON.stringify({
-    contents: [
-      {
-        role: 'user',
-        parts: [
-          { inline_data: { mime_type: mimeType, data: audio } },
-          { text: buildPrompt(now, weekday, tz) },
-        ],
+  const makeBody = (withThinking: boolean) =>
+    JSON.stringify({
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { inline_data: { mime_type: mimeType, data: audio } },
+            { text: buildPrompt(now, weekday, tz) },
+          ],
+        },
+      ],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: RESPONSE_SCHEMA,
+        // Меньше «размышлений» = быстрее ответ. Для разбора короткой фразы глубокое мышление не нужно.
+        ...(withThinking && THINKING ? { thinkingConfig: { thinkingLevel: THINKING } } : {}),
       },
-    ],
-    generationConfig: {
-      temperature: 0.1,
-      responseMimeType: 'application/json',
-      responseSchema: RESPONSE_SCHEMA,
-    },
-  });
+    });
 
   const RETRYABLE = [429, 500, 503, 504];
   let geminiRes: Response | null = null;
   let lastStatus = 0;
+  const started = Date.now();
 
   outer: for (const model of GEMINI_MODELS) {
+    let withThinking = true;
     for (let attempt = 1; attempt <= 2; attempt++) {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
-          body: requestBody,
-        }
-      );
+      const t0 = Date.now();
+      let res: Response;
+      try {
+        // Не ждём бесконечно: если модель «зависла» в очереди — прерываем и пробуем дальше.
+        res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+            body: makeBody(withThinking),
+            signal: AbortSignal.timeout(TIMEOUT_MS),
+          }
+        );
+      } catch (e) {
+        lastStatus = 504;
+        console.error('gemini', model, `attempt ${attempt}`, `timeout/network after ${Date.now() - t0} ms`, String(e));
+        continue; // сразу следующая попытка, без паузы
+      }
       if (res.ok) {
         geminiRes = res;
+        console.log(
+          'gemini ok', model, `attempt ${attempt}`, `thinking=${withThinking ? THINKING : 'off'}`,
+          mimeType, `audio ~${Math.round((audio.length * 3) / 4 / 1024)} KB`,
+          `${Date.now() - t0} ms (total ${Date.now() - started} ms)`
+        );
         break outer;
       }
       lastStatus = res.status;
-      console.error('gemini', model, `attempt ${attempt}`, res.status, await res.text());
+      const errText = await res.text();
+      console.error('gemini', model, `attempt ${attempt}`, res.status, `${Date.now() - t0} ms`, errText);
+
+      // Модель не знает параметр thinkingLevel — сразу повторяем без него.
+      if (res.status === 400 && withThinking && /thinking/i.test(errText)) {
+        withThinking = false;
+        continue;
+      }
       if (!RETRYABLE.includes(res.status)) break; // ошибка не временная — сразу к следующей модели
       if (attempt === 1) await new Promise((r) => setTimeout(r, 1000));
     }
@@ -209,6 +244,7 @@ Deno.serve(async (req) => {
     const result = await geminiRes.json();
     const text = result?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? '').join('') ?? '';
     const parsed = JSON.parse(text);
+    console.log('transcript', JSON.stringify(parsed.transcript ?? ''));
     const today = now.slice(0, 10);
     const tasks = Array.isArray(parsed.tasks)
       ? parsed.tasks.slice(0, 10).map((t: Record<string, unknown>) => cleanTask(t, today)).filter((t) => t.title)

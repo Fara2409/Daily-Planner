@@ -19,7 +19,9 @@ const SILENCE_PEAK = 0.03;
 // Начать запись. onLevel(0..1) вызывается ~10 раз в секунду — для полоски громкости.
 // stop() возвращает { blob, silent }.
 export async function startRecording(onLevel = () => {}) {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+  });
 
   // Измеритель громкости: смотрим на звуковую волну и запоминаем самый громкий момент.
   let peak = 0;
@@ -45,7 +47,11 @@ export async function startRecording(onLevel = () => {}) {
   }
 
   const mimeType = pickMimeType();
-  const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+  // 32 кбит/с — качество «голосового сообщения»: речь разборчива, а файл в разы меньше.
+  const recorder = new MediaRecorder(stream, {
+    ...(mimeType ? { mimeType } : {}),
+    audioBitsPerSecond: 32000,
+  });
   const chunks = [];
   recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
 
