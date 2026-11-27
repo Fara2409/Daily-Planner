@@ -5,8 +5,9 @@
 //   verify  — ввод кода из письма после регистрации
 //   forgot  — запрос кода для сброса пароля
 //   reset   — ввод кода и нового пароля
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import LangSwitch from './LangSwitch.jsx';
+import Turnstile, { captchaEnabled } from './Turnstile.jsx';
 import {
   signInWithGoogle,
   signInWithPassword,
@@ -30,6 +31,7 @@ const GoogleIcon = () => (
 const KNOWN = [
   'invalid_credentials', 'user_already_exists', 'weak_password', 'otp_expired',
   'over_email_send_rate_limit', 'over_request_rate_limit', 'email_address_invalid',
+  'captcha_failed',
 ];
 const errorKey = (error) => {
   if (KNOWN.includes(error?.code)) return `err_${error.code}`;
@@ -47,6 +49,8 @@ export default function LoginScreen({ lang, setLang, t, onHold }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
+  const [captcha, setCaptcha] = useState('');
+  const captchaRef = useRef(null);
 
   const go = (next) => {
     setMode(next);
@@ -56,7 +60,12 @@ export default function LoginScreen({ lang, setLang, t, onHold }) {
   };
 
   // Общая обёртка: показать «загрузку», поймать ошибку.
-  const run = async (fn) => {
+  // needsCaptcha — для действий, которые Supabase защищает проверкой «не робот».
+  const run = async (fn, needsCaptcha = false) => {
+    if (needsCaptcha && captchaEnabled && !captcha) {
+      setError(t('captchaWait'));
+      return;
+    }
     setBusy(true);
     setError('');
     setInfo('');
@@ -67,6 +76,7 @@ export default function LoginScreen({ lang, setLang, t, onHold }) {
       setError(t(errorKey(e)));
     } finally {
       setBusy(false);
+      if (needsCaptcha) captchaRef.current?.reset(); // токен одноразовый
     }
   };
   const check = ({ error }) => { if (error) throw error; };
@@ -79,18 +89,17 @@ export default function LoginScreen({ lang, setLang, t, onHold }) {
 
     if (mode === 'signIn') {
       return run(async () => {
-        const { error } = await signInWithPassword(mail, password);
+        const { error } = await signInWithPassword(mail, password, captcha);
         if (error?.code === 'email_not_confirmed') {
-          await resendSignupCode(mail);
-          return go('verify');
+          return go('verify'); // код можно запросить кнопкой «Отправить ещё раз»
         }
         check({ error });
-      });
+      }, true);
     }
 
     if (mode === 'signUp') {
       return run(async () => {
-        const { data, error } = await signUp(mail, password);
+        const { data, error } = await signUp(mail, password, captcha);
         check({ error });
         // Supabase не сообщает прямо, что email уже занят (защита от перебора адресов),
         // но в этом случае у пользователя нет ни одной «личности».
@@ -98,7 +107,7 @@ export default function LoginScreen({ lang, setLang, t, onHold }) {
           throw { code: 'user_already_exists' };
         }
         go('verify');
-      });
+      }, true);
     }
 
     if (mode === 'verify') {
@@ -107,9 +116,9 @@ export default function LoginScreen({ lang, setLang, t, onHold }) {
 
     if (mode === 'forgot') {
       return run(async () => {
-        check(await sendResetCode(mail));
+        check(await sendResetCode(mail, captcha));
         go('reset');
-      });
+      }, true);
     }
 
     if (mode === 'reset') {
@@ -127,9 +136,9 @@ export default function LoginScreen({ lang, setLang, t, onHold }) {
 
   const resend = () =>
     run(async () => {
-      check(mode === 'reset' ? await sendResetCode(email) : await resendSignupCode(email));
+      check(mode === 'reset' ? await sendResetCode(email, captcha) : await resendSignupCode(email, captcha));
       setInfo(t('resent'));
-    });
+    }, true);
 
   const needsPassword = mode === 'signIn' || mode === 'signUp' || mode === 'reset';
   const needsCode = mode === 'verify' || mode === 'reset';
@@ -217,6 +226,7 @@ export default function LoginScreen({ lang, setLang, t, onHold }) {
           )}
           {(mode === 'signUp' || mode === 'reset') && <p className="hint">{t('passwordHint')}</p>}
 
+          <Turnstile ref={captchaRef} lang={lang} onToken={setCaptcha} />
           {error && <p className="form-error">{error}</p>}
           {info && <p className="hint">{info}</p>}
 

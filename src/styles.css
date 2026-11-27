@@ -339,3 +339,17 @@ button { cursor: pointer; }
 .notify--on { padding: 8px 14px; }
 .notify--on .notify__text { flex-direction: row; gap: 8px; align-items: baseline; }
 .notify--on .notify__text strong { font-size: 0.85rem; }
+
+/* ---------- Список и опасные действия ---------- */
+.segmented button { padding: 6px 12px; }
+.agenda__title { margin: 8px 0 0; font-size: 0.95rem; color: var(--muted); }
+.agenda__title--danger { color: var(--danger); }
+.day-card.is-overdue { border-color: var(--danger); }
+.account { flex-wrap: wrap; }
+.link-btn--danger { color: var(--danger); }
+.danger-text { margin: 0; color: var(--danger); font-size: 0.95rem; }
+.btn--danger-fill { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
+.btn--danger-fill:disabled { opacity: 0.4; }
+.captcha { min-height: 0; display: flex; justify-content: center; }
+.toolbar + .notify, .toolbar + .content { margin-top: 12px; }
+.app { padding-bottom: calc(env(safe-area-inset-bottom) + 120px); }

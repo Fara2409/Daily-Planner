@@ -36,13 +36,18 @@ export const signOut = () => supabase.auth.signOut();
 // ---------- Вход по email и паролю ----------
 // Подтверждение почты и сброс пароля работают через 6-значный КОД из письма,
 // а не через ссылку: на iPhone ссылка открылась бы в Safari, а не в приложении.
+// captcha — одноразовый токен Cloudflare Turnstile (защита от ботов).
 
-export const signInWithPassword = (email, password) =>
-  supabase.auth.signInWithPassword({ email, password });
+const opts = (captcha) => (captcha ? { captchaToken: captcha } : {});
 
-export const signUp = (email, password) => supabase.auth.signUp({ email, password });
+export const signInWithPassword = (email, password, captcha) =>
+  supabase.auth.signInWithPassword({ email, password, options: opts(captcha) });
 
-export const resendSignupCode = (email) => supabase.auth.resend({ type: 'signup', email });
+export const signUp = (email, password, captcha) =>
+  supabase.auth.signUp({ email, password, options: opts(captcha) });
+
+export const resendSignupCode = (email, captcha) =>
+  supabase.auth.resend({ type: 'signup', email, options: opts(captcha) });
 
 // Подтверждение регистрации кодом. Тип 'email' — современный, 'signup' — старый вариант.
 export async function verifySignupCode(email, token) {
@@ -51,7 +56,7 @@ export async function verifySignupCode(email, token) {
   return res;
 }
 
-export const sendResetCode = (email) => supabase.auth.resetPasswordForEmail(email);
+export const sendResetCode = (email, captcha) => supabase.auth.resetPasswordForEmail(email, opts(captcha));
 
 // Сброс пароля: код из письма → временный вход → установка нового пароля.
 export async function resetPassword(email, token, password) {

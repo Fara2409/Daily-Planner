@@ -8,6 +8,8 @@ import TaskForm from './components/TaskForm.jsx';
 import LangSwitch from './components/LangSwitch.jsx';
 import VoiceButton from './components/VoiceButton.jsx';
 import NotificationsCard from './components/NotificationsCard.jsx';
+import Agenda from './components/Agenda.jsx';
+import DeleteAccount from './components/DeleteAccount.jsx';
 import { addDays, addMonths, fromISO, todayISO, toISO, weekDays } from './lib/dates.js';
 import { occursOn, isDone } from './lib/recurrence.js';
 import { newTask, getSetting, setSetting, loadLocalTasks, clearLocalTasks } from './lib/storage.js';
@@ -27,6 +29,7 @@ export default function Planner({ user, lang, setLang, t }) {
   const [voiceQueue, setVoiceQueue] = useState([]);        // дела, распознанные голосом, ждут проверки
   const [voiceInfo, setVoiceInfo] = useState(null);        // { transcript, total } для подписи в форме
   const [error, setError] = useState(''); // ключ перевода ошибки, например 'errorSave'
+  const [deleting, setDeleting] = useState(false);          // открыто окно «Удалить аккаунт»
 
   const names = dateNames(lang);
   const today = todayISO();
@@ -171,15 +174,18 @@ export default function Planner({ user, lang, setLang, t }) {
           <button className={view === 'month' ? 'is-active' : ''} onClick={() => setView('month')}>
             {t('month')}
           </button>
+          <button className={view === 'list' ? 'is-active' : ''} onClick={() => setView('list')}>
+            {t('list')}
+          </button>
         </div>
         <button className="btn btn--small" onClick={goToday}>{t('today')}</button>
       </nav>
 
-      <div className="period">
+      {view !== 'list' && <div className="period">
         <button className="icon-btn" onClick={() => move(-1)} aria-label={t('prev')}>‹</button>
         <h2>{periodTitle}</h2>
         <button className="icon-btn" onClick={() => move(1)} aria-label={t('next')}>›</button>
-      </div>
+      </div>}
 
       {error && (
         <div className="banner" role="alert">
@@ -197,6 +203,8 @@ export default function Planner({ user, lang, setLang, t }) {
       <main className="content">
         {tasks === null ? (
           <p className="day-card__empty">{t('loading')}</p>
+        ) : view === 'list' ? (
+          <Agenda tasks={list} today={today} names={names} t={t} byTime={byTime} dayProps={dayProps} />
         ) : view === 'week' ? (
           days.map((d) => {
             const iso = toISO(d);
@@ -220,7 +228,10 @@ export default function Planner({ user, lang, setLang, t }) {
       <footer className="account">
         <span>{user.email}</span>
         <button className="link-btn" onClick={logout}>{t('signOut')}</button>
+        <button className="link-btn link-btn--danger" onClick={() => setDeleting(true)}>{t('deleteAccount')}</button>
       </footer>
+
+      {deleting && <DeleteAccount t={t} onClose={() => setDeleting(false)} />}
 
       <div className="actions">
         <VoiceButton t={t} onResult={onVoiceResult} onError={onVoiceError} />

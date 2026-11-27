@@ -244,7 +244,6 @@ Deno.serve(async (req) => {
     const result = await geminiRes.json();
     const text = result?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? '').join('') ?? '';
     const parsed = JSON.parse(text);
-    console.log('transcript', JSON.stringify(parsed.transcript ?? ''));
     const today = now.slice(0, 10);
     const tasks = Array.isArray(parsed.tasks)
       ? parsed.tasks.slice(0, 10).map((t: Record<string, unknown>) => cleanTask(t, today)).filter((t) => t.title)

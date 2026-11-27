@@ -2,14 +2,14 @@
 import { fromISO } from '../lib/dates.js';
 import { isDone } from '../lib/recurrence.js';
 
-export default function DayCard({ iso, tasks, isToday, names, t, onAdd, onEdit, onToggle }) {
+export default function DayCard({ iso, tasks, isToday, names, t, onAdd, onEdit, onToggle, label, overdue }) {
   const date = fromISO(iso);
 
   return (
-    <section className={`day-card${isToday ? ' is-today' : ''}`}>
+    <section className={`day-card${isToday ? ' is-today' : ''}${overdue ? ' is-overdue' : ''}`}>
       <header className="day-card__head">
         <div>
-          <span className="day-card__weekday">{names.weekday(date)}</span>
+          <span className="day-card__weekday">{label ?? names.weekday(date)}</span>
           <span className="day-card__date">{names.dayMonth(date)}</span>
         </div>
         <button className="icon-btn" onClick={() => onAdd(iso)} aria-label={t('add')}>
