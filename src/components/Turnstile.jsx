@@ -3,7 +3,7 @@
 // Ключ сайта (site key) — публичный. Секретный ключ хранится только в Supabase.
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 
-export const TURNSTILE_SITE_KEY = 'TURNSTILE_SITE_KEY_HERE';
+export const TURNSTILE_SITE_KEY = '0x4AAAAAAGVvcfIbgKO8hLkE';
 export const captchaEnabled = !TURNSTILE_SITE_KEY.includes('HERE');
 
 let scriptPromise = null;
