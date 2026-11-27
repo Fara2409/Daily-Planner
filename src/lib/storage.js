@@ -1,11 +1,10 @@
-// Хранение дел.
-// Этап 1: в памяти браузера на этом телефоне (localStorage).
-// Этап 2: заменим на сервер Supabase — остальной код при этом почти не изменится,
-// потому что всё приложение работает с делами только через эти функции.
+// Локальное хранилище телефона (localStorage).
+// С этапа 2 дела хранятся на сервере (см. api.js), а здесь остаются только
+// настройки (язык, вид календаря) и дела из этапа 1 — их один раз переносим на сервер.
 
 const KEY = 'daily-planner.tasks.v1';
 
-export function loadTasks() {
+export function loadLocalTasks() {
   try {
     return JSON.parse(localStorage.getItem(KEY)) ?? [];
   } catch {
@@ -13,11 +12,11 @@ export function loadTasks() {
   }
 }
 
-export function saveTasks(tasks) {
+export function clearLocalTasks() {
   try {
-    localStorage.setItem(KEY, JSON.stringify(tasks));
+    localStorage.removeItem(KEY);
   } catch {
-    // Память переполнена или недоступна — просто не сохраняем.
+    /* ignore */
   }
 }
 

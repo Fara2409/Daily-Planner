@@ -134,3 +134,12 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Файлы, которые Claude присылает в чат (скриншоты тестов) — не для репозитория
+Claude outputs/
+
+# Секреты никогда не попадают в репозиторий
+*.key
+client_secret_*.json
+.env
+.env.*
