@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { REPEATS } from '../lib/recurrence.js';
 import { eveningBefore } from '../lib/dates.js';
 
-export default function TaskForm({ task, isNew, t, onSave, onDelete, onClose }) {
+export default function TaskForm({ task, isNew, t, onSave, onDelete, onClose, heard, counter }) {
   const [draft, setDraft] = useState(task);
   const [error, setError] = useState('');
 
@@ -22,7 +22,12 @@ export default function TaskForm({ task, isNew, t, onSave, onDelete, onClose }) 
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <form className="sheet" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-        <h2>{isNew ? t('newTask') : t('editTask')}</h2>
+        <h2>{isNew ? t('newTask') : t('editTask')}{counter && <span className="sheet__counter">{counter}</span>}</h2>
+        {heard && (
+          <p className="heard">
+            <span>{t('heard')}:</span> «{heard}»
+          </p>
+        )}
 
         <label>
           {t('title')}

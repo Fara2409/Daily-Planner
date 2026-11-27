@@ -6,6 +6,7 @@ import DayCard from './components/DayCard.jsx';
 import MonthGrid from './components/MonthGrid.jsx';
 import TaskForm from './components/TaskForm.jsx';
 import LangSwitch from './components/LangSwitch.jsx';
+import VoiceButton from './components/VoiceButton.jsx';
 import { addDays, addMonths, fromISO, todayISO, toISO, weekDays } from './lib/dates.js';
 import { occursOn, isDone } from './lib/recurrence.js';
 import { newTask, getSetting, setSetting, loadLocalTasks, clearLocalTasks } from './lib/storage.js';
@@ -22,6 +23,8 @@ export default function Planner({ user, lang, setLang, t }) {
   const [selected, setSelected] = useState(todayISO);      // выбранный день в режиме «Месяц»
   const [tasks, setTasks] = useState(null);                // null = ещё загружаем
   const [editing, setEditing] = useState(null);            // { task, isNew } или null
+  const [voiceQueue, setVoiceQueue] = useState([]);        // дела, распознанные голосом, ждут проверки
+  const [voiceInfo, setVoiceInfo] = useState(null);        // { transcript, total } для подписи в форме
   const [error, setError] = useState(''); // ключ перевода ошибки, например 'errorSave'
 
   const names = dateNames(lang);
@@ -86,7 +89,7 @@ export default function Planner({ user, lang, setLang, t }) {
     setTasks((prev) =>
       prev.some((x) => x.id === task.id) ? prev.map((x) => (x.id === task.id ? task : x)) : [...prev, task]
     );
-    setEditing(null);
+    closeForm();
     sync(api.saveTask(task));
   };
 
@@ -104,6 +107,39 @@ export default function Planner({ user, lang, setLang, t }) {
     const updated = { ...task, doneDates };
     setTasks((prev) => prev.map((x) => (x.id === task.id ? updated : x)));
     sync(api.saveTask(updated));
+  };
+
+  // --- голосовой ввод ---
+  // ИИ вернул список дел → показываем их по одному в форме, человек проверяет и сохраняет.
+  const openVoiceTask = (queue, total, transcript) => {
+    if (!queue.length) {
+      setVoiceInfo(null);
+      return setEditing(null);
+    }
+    const [first, ...rest] = queue;
+    setVoiceQueue(rest);
+    setVoiceInfo({ transcript, total, n: total - rest.length });
+    setEditing({ task: { ...newTask(first.date), ...first }, isNew: true });
+    setView('week');
+    setCursor(fromISO(first.date)); // показать неделю этого дела
+    setSelected(first.date);
+  };
+
+  const onVoiceResult = (res) => {
+    if (!res?.understood || !res.tasks?.length) return setError('v_not_understood');
+    setError('');
+    openVoiceTask(res.tasks, res.tasks.length, res.transcript);
+  };
+
+  const onVoiceError = (code) => setError(`v_${code}`);
+
+  // После сохранения/закрытия формы — открыть следующее распознанное дело, если есть.
+  const closeForm = () => {
+    if (voiceQueue.length) openVoiceTask(voiceQueue, voiceInfo.total, voiceInfo.transcript);
+    else {
+      setEditing(null);
+      setVoiceInfo(null);
+    }
   };
 
   const logout = () => {
@@ -147,7 +183,11 @@ export default function Planner({ user, lang, setLang, t }) {
       {error && (
         <div className="banner" role="alert">
           <span>{t(error)}</span>
-          <button className="btn btn--small" onClick={load}>{t('retry')}</button>
+          {error === 'errorLoad' || error === 'errorSave' ? (
+            <button className="btn btn--small" onClick={load}>{t('retry')}</button>
+          ) : (
+            <button className="icon-btn" onClick={() => setError('')} aria-label="OK">×</button>
+          )}
         </div>
       )}
 
@@ -179,22 +219,30 @@ export default function Planner({ user, lang, setLang, t }) {
         <button className="link-btn" onClick={logout}>{t('signOut')}</button>
       </footer>
 
-      <button
-        className="fab"
-        onClick={() => openNew(view === 'month' ? selected : today)}
-        aria-label={t('add')}
-      >
-        +
-      </button>
+      <div className="actions">
+        <VoiceButton t={t} onResult={onVoiceResult} onError={onVoiceError} />
+        <button
+          className="fab"
+          onClick={() => openNew(view === 'month' ? selected : today)}
+          aria-label={t('add')}
+        >
+          +
+        </button>
+      </div>
 
       {editing && (
         <TaskForm
+          key={editing.task.id}
           task={editing.task}
           isNew={editing.isNew}
           t={t}
           onSave={save}
           onDelete={remove}
-          onClose={() => setEditing(null)}
+          onClose={closeForm}
+          heard={voiceInfo?.transcript}
+          counter={voiceInfo && voiceInfo.total > 1
+            ? t('voiceCount').replace('{n}', voiceInfo.n).replace('{total}', voiceInfo.total)
+            : null}
         />
       )}
     </div>
